@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { db, auth } from '../firebase/config';
+import { db, auth, googleProvider } from '../firebase/config';
 import { 
   doc, 
   getDoc, 
@@ -11,7 +11,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { format } from 'date-fns';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
 
 const useStore = create((set, get) => ({
   todayData: {
@@ -27,6 +27,24 @@ const useStore = create((set, get) => ({
   viewDate: format(new Date(), 'yyyy-MM-dd'),
   currentDate: format(new Date(), 'yyyy-MM-dd'),
   user: null,
+
+  // Auth Actions
+  loginWithGoogle: async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error("Login failed:", error);
+      set({ authError: error.message });
+    }
+  },
+
+  logout: async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+  },
 
   // Helper to get consistent user paths
   getUserPaths: () => {

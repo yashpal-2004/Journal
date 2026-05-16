@@ -16,7 +16,10 @@ const Settings = () => {
     userDefaults, 
     updateUserDefaults, 
     fetchUserDefaults,
-    resetUserDefaults 
+    resetUserDefaults,
+    user,
+    loginWithGoogle,
+    logout
   } = useStore();
   const [newDefaultTitle, setNewDefaultTitle] = useState('');
   const [newDefaultCategory, setNewDefaultCategory] = useState('Work');
@@ -88,6 +91,39 @@ const Settings = () => {
           )}
         </AnimatePresence>
       </header>
+
+      {/* Cloud Sync Section */}
+      <section className="paper-sheet p-8 shadow-xl rotate-1 border-ink-blue/5 bg-paper-50/50">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <h2 className="text-3xl font-hand text-ink-black underline decoration-marker-pink decoration-4 underline-offset-[-2px]">
+              Cloud Identity
+            </h2>
+            <p className="text-lg font-hand text-slate-500">
+              {user?.isAnonymous 
+                ? "You're using a local guest account. Sign in to sync across devices." 
+                : `Synced as ${user?.email}`}
+            </p>
+          </div>
+
+          {user?.isAnonymous ? (
+            <button 
+              onClick={loginWithGoogle}
+              className="bg-white text-ink-black border-2 border-slate-200 px-6 py-3 rounded-sm font-display text-lg hover:bg-slate-50 transition-all flex items-center justify-center gap-3 shadow-md active:scale-95"
+            >
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+              SIGN IN WITH GOOGLE
+            </button>
+          ) : (
+            <button 
+              onClick={logout}
+              className="text-sm font-display text-slate-400 hover:text-rose-500 transition-colors uppercase tracking-widest"
+            >
+              Log Out
+            </button>
+          )}
+        </div>
+      </section>
 
       {/* Master Routine Editor */}
       <section className="space-y-8">

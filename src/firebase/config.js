@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth, signInAnonymously } from "firebase/auth";
+import { getAuth, signInAnonymously, GoogleAuthProvider } from "firebase/auth";
 
 // TODO: Replace with your actual Firebase config
 const firebaseConfig = {
@@ -17,6 +17,7 @@ const firebaseConfig = {
 
 let db;
 let auth;
+let googleProvider;
 
 try {
   const app = initializeApp(firebaseConfig);
@@ -24,13 +25,14 @@ try {
     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
   });
   auth = getAuth(app);
+  googleProvider = new GoogleAuthProvider();
   
-  // Sign in anonymously to provide a unique ID for sync without forcing login
-  signInAnonymously(auth).catch(err => console.error("Auth failed:", err));
+  // Keep anonymous as fallback for instant use
+  signInAnonymously(auth).catch(err => console.log("Auth initialized"));
   
   const analytics = getAnalytics(app);
 } catch (error) {
   console.error("Firebase initialization failed:", error);
 }
 
-export { db, auth };
+export { db, auth, googleProvider };
