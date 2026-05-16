@@ -233,7 +233,8 @@ const Dashboard = () => {
     updateTodayData,
     fetchUserDefaults,
     seedTodayWithDefaults,
-    user
+    user,
+    authError
   } = useStore();
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -307,6 +308,25 @@ const Dashboard = () => {
   };
 
   const isDataMismatched = todayData?.date !== viewDate;
+
+  if (authError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center px-6 animate-fade-in">
+        <div className="p-6 bg-rose-50 border-2 border-rose-100 rounded-sm rotate-1 shadow-xl max-w-lg">
+          <Trash2 className="w-12 h-12 text-rose-500 mx-auto mb-4" />
+          <h2 className="text-3xl font-hand text-ink-black mb-2">Connection Blocked</h2>
+          <p className="text-xl font-hand text-slate-600 mb-6">
+            {authError}
+          </p>
+          <div className="text-left bg-white/50 p-4 rounded-sm border border-rose-100 text-sm font-display text-slate-500 space-y-2">
+            <p>1. Go to your <a href="https://console.firebase.google.com/" target="_blank" className="text-ink-blue underline">Firebase Console</a></p>
+            <p>2. Select <strong>Authentication</strong> &gt; <strong>Sign-in method</strong></p>
+            <p>3. Enable the <strong>Anonymous</strong> provider</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading || !user) {
     return (

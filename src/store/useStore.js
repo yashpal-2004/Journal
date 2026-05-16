@@ -23,6 +23,7 @@ const useStore = create((set, get) => ({
   },
   history: [],
   isLoading: true,
+  authError: null,
   viewDate: format(new Date(), 'yyyy-MM-dd'),
   currentDate: format(new Date(), 'yyyy-MM-dd'),
   user: null,
@@ -39,14 +40,31 @@ const useStore = create((set, get) => ({
 
   // Initialize auth listener
   initAuth: () => {
-    return onAuthStateChanged(auth, (user) => {
-      set({ user, isLoading: !user });
+    const unsub = onAuthStateChanged(auth, (user) => {
       if (user) {
+        set({ user, isLoading: false, authError: null });
         get().fetchTodayData();
         get().fetchUserDefaults();
         get().fetchHistory();
+      } else {
+        set({ user: null });
       }
+    }, (error) => {
+      console.error("Auth state listener error:", error);
+      set({ authError: error.message, isLoading: false });
     });
+
+    setTimeout(() => {
+      const { user, authError } = get();
+      if (!user && !authError) {
+        set({ 
+          isLoading: false, 
+          authError: "Please enable 'Anonymous Authentication' in your Firebase Console (Authentication > Sign-in method)." 
+        });
+      }
+    }, 10000);
+
+    return unsub;
   },
 
   setViewDate: (dateStr) => {
