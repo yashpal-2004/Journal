@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Patrick+Hand&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-paper-100 text-ink-black font-sans selection:bg-marker-yellow selection:text-ink-black;
+    background-image: 
+      linear-gradient(90deg, transparent 79px, #abced4 79px, #abced4 81px, transparent 81px),
+      linear-gradient(#eee .1em, transparent .1em);
+    background-size: 100% 1.5rem;
+    -webkit-tap-highlight-color: transparent;
+    line-height: 1.5rem;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-normal tracking-wide text-ink-blue;
+  }
+}
+
+@layer components {
+  .paper-sheet {
+    @apply bg-paper-50 border border-slate-200 shadow-[2px_2px_0px_rgba(0,0,0,0.1)] rounded-sm relative;
+    transform: rotate(-0.5deg);
+  }
+  
+  .paper-sheet:nth-child(even) {
+    transform: rotate(0.5deg);
+  }
+
+  .marker-highlight {
+    @apply bg-marker-yellow/60 px-2 py-0.5 -mx-1 rounded-sm;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 font-display;
+  }
+
+  .nav-item-active {
+    @apply bg-marker-yellow text-ink-black border-b-2 border-ink-black rotate-1 scale-105;
+  }
+
+  .nav-item-inactive {
+    @apply text-slate-500 hover:bg-slate-100/50 hover:text-ink-blue;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
