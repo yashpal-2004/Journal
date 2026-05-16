@@ -6,7 +6,16 @@ import History from './pages/History';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 
+import useStore from './store/useStore';
+
 function App() {
+  const { initAuth } = useStore();
+
+  React.useEffect(() => {
+    const unsubAuth = initAuth();
+    return () => unsubAuth();
+  }, [initAuth]);
+
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>

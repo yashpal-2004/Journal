@@ -232,7 +232,8 @@ const Dashboard = () => {
     setViewDate,
     updateTodayData,
     fetchUserDefaults,
-    seedTodayWithDefaults
+    seedTodayWithDefaults,
+    user
   } = useStore();
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -240,18 +241,22 @@ const Dashboard = () => {
   const [isReflectionOpen, setIsReflectionOpen] = useState(false);
 
   useEffect(() => {
+    if (!user) return;
     const unsubHistory = fetchHistory();
     const unsubDefaults = fetchUserDefaults();
     return () => {
-      unsubHistory();
+      if (unsubHistory) unsubHistory();
       if (typeof unsubDefaults === 'function') unsubDefaults();
     };
-  }, [fetchHistory, fetchUserDefaults]);
+  }, [fetchHistory, fetchUserDefaults, user]);
 
   useEffect(() => {
+    if (!user) return;
     const unsubToday = fetchTodayData();
-    return () => unsubToday();
-  }, [fetchTodayData, viewDate]);
+    return () => {
+      if (unsubToday) unsubToday();
+    };
+  }, [fetchTodayData, viewDate, user]);
 
   const handlePrevDay = () => {
     try {
@@ -303,11 +308,14 @@ const Dashboard = () => {
 
   const isDataMismatched = todayData?.date !== viewDate;
 
-  if (isLoading) {
+  if (isLoading || !user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-6">
         <div className="w-12 h-12 border-4 border-slate-200 border-t-ink-blue rounded-full animate-spin" />
-        <p className="text-2xl font-hand text-slate-500">Sharpening pencils...</p>
+        <div className="space-y-1">
+          <p className="text-2xl font-hand text-ink-black">Securing your journal...</p>
+          <p className="text-sm font-display text-slate-400 uppercase tracking-widest">Connecting to your private cloud</p>
+        </div>
       </div>
     );
   }

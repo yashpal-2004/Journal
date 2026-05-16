@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { db } from '../firebase/config';
+import { db, auth } from '../firebase/config';
 import { 
   doc, 
   getDoc, 
@@ -11,6 +11,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { format } from 'date-fns';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const useStore = create((set, get) => ({
   todayData: {
@@ -18,11 +19,35 @@ const useStore = create((set, get) => ({
     commentary: '',
     completionPercentage: 0,
     updatedAt: new Date(),
+    date: format(new Date(), 'yyyy-MM-dd')
   },
   history: [],
   isLoading: true,
   viewDate: format(new Date(), 'yyyy-MM-dd'),
   currentDate: format(new Date(), 'yyyy-MM-dd'),
+  user: null,
+
+  // Helper to get consistent user paths
+  getUserPaths: () => {
+    const user = auth?.currentUser;
+    if (!user) return null;
+    return {
+      entries: `users/${user.uid}/dailyEntries`,
+      settings: `users/${user.uid}/settings`
+    };
+  },
+
+  // Initialize auth listener
+  initAuth: () => {
+    return onAuthStateChanged(auth, (user) => {
+      set({ user, isLoading: !user });
+      if (user) {
+        get().fetchTodayData();
+        get().fetchUserDefaults();
+        get().fetchHistory();
+      }
+    });
+  },
 
   setViewDate: (dateStr) => {
     set({ viewDate: dateStr });
@@ -31,8 +56,10 @@ const useStore = create((set, get) => ({
   userDefaults: [],
 
   fetchUserDefaults: async () => {
-    if (!db) return;
-    const docRef = doc(db, 'settings', 'defaults');
+    const paths = get().getUserPaths();
+    if (!paths) return;
+
+    const docRef = doc(db, paths.settings, 'defaults');
     return onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         set({ userDefaults: docSnap.data().tasks || [] });
@@ -59,8 +86,9 @@ const useStore = create((set, get) => ({
   },
 
   updateUserDefaults: async (tasks) => {
-    if (!db) return;
-    const docRef = doc(db, 'settings', 'defaults');
+    const paths = get().getUserPaths();
+    if (!paths) return;
+    const docRef = doc(db, paths.settings, 'defaults');
     await setDoc(docRef, { tasks });
   },
 
@@ -101,15 +129,15 @@ const useStore = create((set, get) => ({
     await updateUserDefaults(recommended);
   },
 
-  // Fetch data for the current viewDate and subscribe to changes
   fetchTodayData: () => {
-    const { viewDate, isLoading } = get();
-    if (!db) {
+    const { viewDate } = get();
+    const paths = get().getUserPaths();
+    if (!paths) {
       set({ isLoading: false });
       return () => {};
     }
     
-    const docRef = doc(db, 'dailyEntries', viewDate);
+    const docRef = doc(db, paths.entries, viewDate);
     
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -133,13 +161,13 @@ const useStore = create((set, get) => ({
     return unsubscribe;
   },
 
-  // Save/Update data for a specific date
   updateDataForDate: async (dateStr, newData) => {
     const { history, todayData, currentDate } = get();
+    const paths = get().getUserPaths();
+    if (!paths) return;
     
-    // Get existing data for that date
     let targetData;
-    if (dateStr === currentDate) {
+    if (dateStr === todayData.date) {
       targetData = { ...todayData, ...newData };
     } else {
       const existing = history.find(e => e.id === dateStr);
@@ -147,25 +175,23 @@ const useStore = create((set, get) => ({
     }
 
     targetData.updatedAt = new Date();
+    targetData.date = dateStr;
     
-    // Recalculate percentage if tasks changed
     if (newData.tasks) {
       const total = targetData.tasks.length;
       const completed = targetData.tasks.filter(t => t.completed).length;
       targetData.completionPercentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     }
 
-    // Update local state
-    if (dateStr === currentDate) {
+    if (dateStr === todayData.date) {
       set({ todayData: targetData });
     } else {
       const newHistory = history.map(h => h.id === dateStr ? targetData : h);
       set({ history: newHistory });
     }
     
-    if (!db) return;
     try {
-      await setDoc(doc(db, 'dailyEntries', dateStr), targetData);
+      await setDoc(doc(db, paths.entries, dateStr), targetData);
     } catch (error) {
       console.error("Error saving data:", error);
     }
@@ -186,7 +212,7 @@ const useStore = create((set, get) => ({
       note: '',
       createdAt: new Date(),
     };
-    updateTodayData({ tasks: [...todayData.tasks, newTask] });
+    updateTodayData({ tasks: [...(todayData?.tasks || []), newTask] });
   },
 
   toggleTask: (id) => {
@@ -213,46 +239,34 @@ const useStore = create((set, get) => ({
     updateTodayData({ tasks: updatedTasks });
   },
 
-  reorderTasks: (newTasks) => {
-    const { updateTodayData } = get();
-    updateTodayData({ tasks: newTasks });
-  },
-
   updateCommentary: (commentary) => {
     const { updateTodayData } = get();
     updateTodayData({ commentary });
   },
 
   fetchHistory: () => {
-    if (!db) return () => {};
-    // This could be optimized to fetch only a range
-    const q = query(collection(db, 'dailyEntries'), orderBy('updatedAt', 'desc'), limit(30));
+    const paths = get().getUserPaths();
+    if (!paths) return () => {};
+    
+    const q = query(collection(db, paths.entries), orderBy('updatedAt', 'desc'), limit(30));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const history = [];
       querySnapshot.forEach((doc) => {
         history.push({ id: doc.id, ...doc.data() });
       });
       set({ history });
-    });
+    }, (err) => console.error("History fetch failed:", err));
     return unsubscribe;
   },
 
   getStreaks: () => {
-    const { history, todayData } = get();
-    // Combine history and today's status
-    const allEntries = [...history];
-    // Check if today is completed enough to count (e.g. > 80%) or just any completion?
-    // Usually a streak is days where completionPercentage > 80 or 90
+    const { history } = get();
+    const sortedHistory = [...history].sort((a, b) => b.id.localeCompare(a.id));
     
     let currentStreak = 0;
     let maxStreak = 0;
     let tempStreak = 0;
 
-    // Sort history by date descending for current streak
-    const sortedHistory = [...history].sort((a, b) => b.id.localeCompare(a.id));
-    
-    // Check current streak (starting from today if today > 0% or just history?)
-    // For now, let's just count days with > 0% completion as active days
     for (const entry of sortedHistory) {
       if (entry.completionPercentage > 0) {
         tempStreak++;
@@ -263,8 +277,6 @@ const useStore = create((set, get) => ({
     }
     if (tempStreak > maxStreak) maxStreak = tempStreak;
 
-    // Current streak is special: it must include yesterday or today
-    currentStreak = 0;
     for (const entry of sortedHistory) {
       if (entry.completionPercentage > 0) {
         currentStreak++;
