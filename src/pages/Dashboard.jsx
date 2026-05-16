@@ -7,31 +7,11 @@ import {
   CheckCircle2, 
   Circle, 
   MessageSquare, 
-  PieChart, 
   Zap, 
   Flame,
   RefreshCcw 
 } from 'lucide-react';
 import { format, subDays, addDays, parseISO } from 'date-fns';
-import { 
-  DndContext, 
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragOverlay,
-  useDroppable,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 
 const safeDateFormat = (dateValue) => {
   if (!dateValue) return '';
@@ -52,16 +32,9 @@ const safeDateFormat = (dateValue) => {
   }
 };
 
-const DroppableColumn = ({ id, title, children, color, icon: Icon, isDone = false, count = 0 }) => {
-  const { setNodeRef, isOver } = useDroppable({ id });
-  
+const JournalColumn = ({ title, children, color, icon: Icon, isDone = false, count = 0 }) => {
   return (
-    <div 
-      ref={setNodeRef}
-      className={`paper-sheet p-6 min-h-[500px] flex flex-col transition-colors duration-200 ${
-        isOver ? 'bg-paper-200 ring-2 ring-ink-blue/20 ring-inset' : ''
-      } ${color}`}
-    >
+    <div className={`paper-sheet p-6 min-h-[500px] flex flex-col ${color}`}>
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           {Icon && <Icon className="w-6 h-6 text-ink-pencil/40" />}
@@ -88,93 +61,87 @@ const DroppableColumn = ({ id, title, children, color, icon: Icon, isDone = fals
   );
 };
 
-const SortableTask = ({ task, deleteTask, updateTaskNote, editingNoteId, setEditingNoteId }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id: task.id || 'unknown' });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.3 : 1,
-    zIndex: isDragging ? 50 : 1,
-  };
-
+const TaskCard = ({ task, deleteTask, updateTaskNote, editingNoteId, setEditingNoteId, toggleTask }) => {
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className={`group relative p-4 rounded-sm border-2 transition-all cursor-grab active:cursor-grabbing ${
+      className={`group relative p-4 rounded-sm border-2 transition-all ${
         task.completed 
           ? 'bg-paper-50 border-slate-100 grayscale-[0.5] opacity-60 hover:opacity-100' 
           : 'bg-paper-50 border-ink-pencil/5 shadow-sm hover:shadow-md hover:border-ink-blue/10'
       }`}
     >
-      <div className="pl-2">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <p className={`text-2xl font-hand leading-tight ${task.completed ? 'line-through text-slate-400' : 'text-ink-black'}`}>
-              {task.title}
-            </p>
-            {task.completed && task.completedAt && (
-              <span className="text-sm font-hand text-slate-300 mt-1 block">
-                Done at {safeDateFormat(task.completedAt)}
-              </span>
-            )}
-          </div>
-          
-          <div 
-            className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <button 
-              onClick={(e) => { e.stopPropagation(); setEditingNoteId(editingNoteId === task.id ? null : task.id); }}
-              className="p-1.5 text-slate-400 hover:text-ink-blue rounded-sm hover:bg-slate-50"
-            >
-              <MessageSquare className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}
-              className="p-1.5 text-slate-400 hover:text-rose-500 rounded-sm hover:bg-slate-50"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {task.note && (
-          <div className="mt-2 px-2 py-1 bg-marker-green/10 border-l-2 border-marker-green text-lg italic font-hand text-slate-600 rounded-sm">
-            {task.note}
-          </div>
-        )}
-      </div>
-
-      {editingNoteId === task.id && (
-        <motion.div 
-          initial={{ height: 0, opacity: 0 }}
-          animate={{ height: 'auto', opacity: 1 }}
-          className="mt-4 pt-4 border-t border-slate-100"
-          onPointerDown={(e) => e.stopPropagation()}
+      <div className="flex items-start gap-4">
+        <button
+          onClick={() => toggleTask(task.id)}
+          className={`mt-1 flex-shrink-0 transition-transform active:scale-90 ${
+            task.completed ? 'text-marker-green' : 'text-slate-300 hover:text-ink-blue'
+          }`}
         >
-          <input
-            autoFocus
-            type="text"
-            placeholder="Add a scribbled note..."
-            className="w-full text-xl py-2 bg-transparent border-none focus:ring-0 outline-none font-hand text-ink-blue"
-            value={task.note}
-            onChange={(e) => updateTaskNote(task.id, e.target.value)}
-            onBlur={() => setEditingNoteId(null)}
-            onKeyDown={(e) => e.key === 'Enter' && setEditingNoteId(null)}
-          />
-        </motion.div>
-      )}
+          {task.completed ? (
+            <CheckCircle2 className="w-7 h-7" />
+          ) : (
+            <Circle className="w-7 h-7" />
+          )}
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className={`text-2xl font-hand leading-tight ${task.completed ? 'line-through text-slate-400' : 'text-ink-black'}`}>
+                {task.title}
+              </p>
+              {task.completed && task.completedAt && (
+                <span className="text-sm font-hand text-slate-300 mt-1 block">
+                  Done at {safeDateFormat(task.completedAt)}
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button 
+                onClick={() => setEditingNoteId(editingNoteId === task.id ? null : task.id)}
+                className="p-1.5 text-slate-400 hover:text-ink-blue rounded-sm hover:bg-slate-50"
+              >
+                <MessageSquare className="w-5 h-5" />
+              </button>
+              <button 
+                onClick={() => deleteTask(task.id)}
+                className="p-1.5 text-slate-400 hover:text-rose-500 rounded-sm hover:bg-slate-50"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {task.note && (
+            <div className="mt-2 px-2 py-1 bg-marker-green/10 border-l-2 border-marker-green text-lg italic font-hand text-slate-600 rounded-sm">
+              {task.note}
+            </div>
+          )}
+
+          <AnimatePresence>
+            {editingNoteId === task.id && (
+              <motion.div 
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="mt-4 pt-4 border-t border-slate-100 overflow-hidden"
+              >
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="Add a scribbled note..."
+                  className="w-full text-xl py-2 bg-transparent border-none focus:ring-0 outline-none font-hand text-ink-blue"
+                  value={task.note}
+                  onChange={(e) => updateTaskNote(task.id, e.target.value)}
+                  onBlur={() => setEditingNoteId(null)}
+                  onKeyDown={(e) => e.key === 'Enter' && setEditingNoteId(null)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 };
@@ -182,12 +149,10 @@ const SortableTask = ({ task, deleteTask, updateTaskNote, editingNoteId, setEdit
 const ReflectionModal = ({ isOpen, onClose, commentary, onUpdate }) => {
   const [localText, setLocalText] = useState(commentary || '');
 
-  // Sync when prop changes
   useEffect(() => {
     setLocalText(commentary || '');
   }, [commentary]);
 
-  // Debounced save
   useEffect(() => {
     const timer = setTimeout(() => {
       if (localText !== commentary) {
@@ -272,13 +237,7 @@ const Dashboard = () => {
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [editingNoteId, setEditingNoteId] = useState(null);
-  const [activeId, setActiveId] = useState(null);
   const [isReflectionOpen, setIsReflectionOpen] = useState(false);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
 
   useEffect(() => {
     const unsubHistory = fetchHistory();
@@ -342,66 +301,6 @@ const Dashboard = () => {
     }
   };
 
-  const handleDragEnd = (event) => {
-    const { active, over } = event;
-    const taskId = active.id;
-    let newTasks = [...(todayData?.tasks || [])];
-    const taskIndex = newTasks.findIndex(t => t.id === taskId);
-    if (taskIndex === -1) return;
-
-    const task = { ...newTasks[taskIndex] };
-
-    // 1. If dragging a DONE task and dropped ANYWHERE else
-    if (task.completed && (!over || over.id !== 'Done')) {
-      task.completed = false;
-      task.completedAt = null;
-      
-      // Handle reordering if dropped on a task
-      if (over && over.id !== taskId && !['Work', 'Routine', 'Done'].includes(over.id)) {
-        const overIndex = newTasks.findIndex(t => t.id === over.id);
-        if (overIndex !== -1) {
-          newTasks[taskIndex] = task;
-          newTasks = arrayMove(newTasks, taskIndex, overIndex);
-          updateTodayData({ tasks: newTasks });
-          setActiveId(null);
-          return;
-        }
-      }
-      // If dropped on container or empty space, move to BOTTOM of its category
-      newTasks.splice(taskIndex, 1);
-      newTasks.push(task);
-    } 
-    // 2. Normal drop onto a container (column header or empty space)
-    else if (over && ['Work', 'Routine', 'Done'].includes(over.id)) {
-      if (over.id === 'Done') {
-        task.completed = true;
-        task.completedAt = task.completedAt || new Date();
-      } else {
-        task.completed = false;
-        task.completedAt = null;
-      }
-      // Move to BOTTOM of the new container
-      newTasks.splice(taskIndex, 1);
-      newTasks.push(task);
-    } 
-    // 3. Dropped onto another task (Explicit reordering)
-    else if (over && active.id !== over.id) {
-      const overIndex = newTasks.findIndex(t => t.id === over.id);
-      if (overIndex !== -1) {
-        const targetTask = newTasks[overIndex];
-        if (task.completed !== targetTask.completed) {
-          task.completed = targetTask.completed;
-          task.completedAt = targetTask.completed ? (task.completedAt || new Date()) : null;
-        }
-        newTasks[taskIndex] = task;
-        newTasks = arrayMove(newTasks, taskIndex, overIndex);
-      }
-    }
-
-    updateTodayData({ tasks: newTasks });
-    setActiveId(null);
-  };
-
   const isDataMismatched = todayData?.date !== viewDate;
 
   if (isLoading) {
@@ -436,15 +335,11 @@ const Dashboard = () => {
           <span className="text-sm font-hand text-ink-black uppercase tracking-widest">Snapshotting...</span>
         </div>
       )}
+      
       {/* Top Control Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-slate-200 pb-6 border-dashed">
-        {/* Date & Nav - Top Left */}
         <div className="flex items-center gap-4">
-          <button 
-            onClick={handlePrevDay}
-            className="p-1.5 hover:bg-marker-yellow/20 rounded-sm transition-colors border border-transparent hover:border-slate-200"
-            title="Previous Day"
-          >
+          <button onClick={handlePrevDay} className="p-1.5 hover:bg-marker-yellow/20 rounded-sm transition-colors border border-transparent hover:border-slate-200">
             <Plus className="w-5 h-5 rotate-45 text-ink-pencil" />
           </button>
           
@@ -454,57 +349,37 @@ const Dashboard = () => {
               {viewDate === currentDate && <span className="ml-2 text-xs bg-marker-green/20 px-1.5 py-0.5 rounded-sm text-ink-blue">TODAY</span>}
             </p>
             {viewDate !== currentDate && (
-              <button 
-                onClick={handleGoToToday}
-                className="text-left font-hand text-sm text-ink-blue underline decoration-marker-yellow decoration-2 underline-offset-2"
-              >
+              <button onClick={handleGoToToday} className="text-left font-hand text-sm text-ink-blue underline decoration-marker-yellow decoration-2 underline-offset-2">
                 Back to Today
               </button>
             )}
           </div>
 
-          <button 
-            onClick={handleNextDay}
-            className="p-1.5 hover:bg-marker-yellow/20 rounded-sm transition-colors border border-transparent hover:border-slate-200"
-            title="Next Day"
-          >
+          <button onClick={handleNextDay} className="p-1.5 hover:bg-marker-yellow/20 rounded-sm transition-colors border border-transparent hover:border-slate-200">
             <Plus className="w-5 h-5 -rotate-45 text-ink-pencil" />
           </button>
         </div>
 
-        {/* Stats, Score & Reflections Button - Top Right */}
         <div className="flex flex-wrap items-center gap-4 lg:gap-8">
-          <button 
-            onClick={() => setIsReflectionOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-paper-50 border border-slate-200 rounded-sm font-hand text-xl text-ink-blue hover:bg-marker-yellow/10 transition-colors shadow-sm"
-          >
+          <button onClick={() => setIsReflectionOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-paper-50 border border-slate-200 rounded-sm font-hand text-xl text-ink-blue hover:bg-marker-yellow/10 transition-colors shadow-sm">
             <MessageSquare className="w-5 h-5 opacity-50" />
             Daily Reflections
           </button>
 
           <div className="flex items-center gap-6 bg-paper-50 p-3 rounded-sm border border-slate-100 shadow-sm rotate-1">
-            {/* Circular Progress */}
             <div className="flex items-center gap-3 pr-6 border-r border-slate-200 border-dashed">
               <div className="relative w-12 h-12 flex items-center justify-center">
                 <svg className="w-full h-full transform -rotate-90">
                   <circle cx="24" cy="24" r="20" stroke="#f1f5f9" strokeWidth="3" fill="transparent" />
                   <motion.circle
-                    cx="24"
-                    cy="24"
-                    r="20"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="transparent"
-                    strokeDasharray="125.6"
+                    cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="transparent" strokeDasharray="125.6"
                     initial={{ strokeDashoffset: 125.6 }}
                     animate={{ strokeDashoffset: 125.6 - (125.6 * progress) / 100 }}
                     transition={{ duration: 1.5, ease: "easeOut" }}
                     className={getProgressColor(progress)}
                   />
                 </svg>
-                <span className={`absolute text-xs font-display ${getProgressColor(progress)}`}>
-                  {progress}%
-                </span>
+                <span className={`absolute text-xs font-display ${getProgressColor(progress)}`}>{progress}%</span>
               </div>
               <div>
                 <p className="text-[10px] font-display text-slate-400 uppercase">Score</p>
@@ -512,7 +387,6 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Micro Stats */}
             <div className="flex gap-4 lg:gap-6">
               <MicroStat icon={Flame} label="Streak" value={currentStreak} />
               <MicroStat icon={Zap} label="Best" value={maxStreak} />
@@ -523,141 +397,58 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={({ active }) => setActiveId(active.id)}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="grid grid-cols-1 gap-8 items-start">
-          {/* Empty Day Prompt */}
-          {tasks.length === 0 && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="paper-sheet p-12 text-center border-dashed border-slate-200 rotate-1 mb-8"
-            >
-              <RefreshCcw className="w-16 h-16 text-ink-pencil/20 mx-auto mb-6 animate-spin-slow" />
-              <h2 className="text-4xl font-hand text-ink-black mb-4">A blank page awaits...</h2>
-              <p className="text-xl font-hand text-slate-400 mb-8 max-w-lg mx-auto">
-                Would you like to load your daily blueprint from settings, or start fresh with new goals?
-              </p>
-              <button 
-                onClick={seedTodayWithDefaults}
-                className="bg-ink-blue text-paper-50 px-10 py-4 rounded-sm font-display text-xl hover:scale-105 transition-transform shadow-xl flex items-center gap-3 mx-auto"
-              >
-                <Plus className="w-6 h-6" />
-                LOAD TODAY'S PLAN
-              </button>
-            </motion.div>
-          )}
+      <div className="grid grid-cols-1 gap-8 items-start">
+        {tasks.length === 0 && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="paper-sheet p-12 text-center border-dashed border-slate-200 rotate-1 mb-8">
+            <RefreshCcw className="w-16 h-16 text-ink-pencil/20 mx-auto mb-6 animate-spin-slow" />
+            <h2 className="text-4xl font-hand text-ink-black mb-4">A blank page awaits...</h2>
+            <p className="text-xl font-hand text-slate-400 mb-8 max-w-lg mx-auto">Would you like to load your daily blueprint from settings, or start fresh with new goals?</p>
+            <button onClick={seedTodayWithDefaults} className="bg-ink-blue text-paper-50 px-10 py-4 rounded-sm font-display text-xl hover:scale-105 transition-transform shadow-xl flex items-center gap-3 mx-auto">
+              <Plus className="w-6 h-6" /> LOAD TODAY'S PLAN
+            </button>
+          </motion.div>
+        )}
 
-          {/* Main Board - 3 Columns (Full Width) */}
-          <div className={`grid grid-cols-1 lg:grid-cols-3 gap-8 ${tasks.length === 0 ? 'opacity-20 pointer-events-none' : ''}`}>
-            {/* Priorities Column */}
-            <div className="space-y-6">
-              <form onSubmit={(e) => handleAddTask(e, 'Work')} className="paper-sheet p-4 flex gap-2 border-marker-yellow/40">
-                <input
-                  type="text"
-                  name="priorityTitle"
-                  placeholder="New priority..."
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-xl font-hand"
-                  value={newTaskTitle}
-                  onChange={(e) => setNewTaskTitle(e.target.value)}
-                />
-                <button type="submit" className="text-ink-blue font-display hover:scale-110 transition-transform">+</button>
-              </form>
+        <div className={`grid grid-cols-1 lg:grid-cols-3 gap-8 ${tasks.length === 0 ? 'opacity-20 pointer-events-none' : ''}`}>
+          <div className="space-y-6">
+            <form onSubmit={(e) => handleAddTask(e, 'Work')} className="paper-sheet p-4 flex gap-2 border-marker-yellow/40">
+              <input type="text" name="priorityTitle" placeholder="New priority..." className="flex-1 bg-transparent border-none focus:ring-0 text-xl font-hand" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} />
+              <button type="submit" className="text-ink-blue font-display hover:scale-110 transition-transform">+</button>
+            </form>
+            <JournalColumn title="Priorities" icon={Zap} color="border-marker-yellow/20" count={workTasks.length}>
+              {workTasks.map((task) => (
+                <TaskCard key={task.id} task={task} deleteTask={deleteTask} updateTaskNote={updateTaskNote} toggleTask={toggleTask} editingNoteId={editingNoteId} setEditingNoteId={setEditingNoteId} />
+              ))}
+            </JournalColumn>
+          </div>
 
-              <DroppableColumn id="Work" title="Priorities" icon={Zap} color="border-marker-yellow/20" count={workTasks.length}>
-                <SortableContext items={workTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                  {workTasks.map((task) => (
-                    <SortableTask 
-                      key={task.id} 
-                      task={task} 
-                      deleteTask={deleteTask}
-                      updateTaskNote={updateTaskNote}
-                      editingNoteId={editingNoteId}
-                      setEditingNoteId={setEditingNoteId}
-                    />
-                  ))}
-                </SortableContext>
-              </DroppableColumn>
+          <div className="space-y-6">
+            <form onSubmit={(e) => handleAddTask(e, 'Routine')} className="paper-sheet p-4 flex gap-2 border-marker-green/40">
+              <input type="text" name="routineTitle" placeholder="New routine..." className="flex-1 bg-transparent border-none focus:ring-0 text-xl font-hand" />
+              <button type="submit" className="text-ink-blue font-display hover:scale-110 transition-transform">+</button>
+            </form>
+            <JournalColumn title="Routine" icon={Circle} color="border-marker-green/20" count={routineTasks.length}>
+              {routineTasks.map((task) => (
+                <TaskCard key={task.id} task={task} deleteTask={deleteTask} updateTaskNote={updateTaskNote} toggleTask={toggleTask} editingNoteId={editingNoteId} setEditingNoteId={setEditingNoteId} />
+              ))}
+            </JournalColumn>
+          </div>
+
+          <div className="space-y-6">
+            <div className="paper-sheet p-4 flex justify-between items-center bg-marker-pink/5 border-marker-pink/20">
+              <span className="font-hand text-xl">Completed Today</span>
+              <button onClick={handleClearAll} className="text-xs font-display text-slate-300 hover:text-rose-500 transition-colors uppercase tracking-wider">Clear</button>
             </div>
-
-            {/* Routine Column */}
-            <div className="space-y-6">
-              <form onSubmit={(e) => handleAddTask(e, 'Routine')} className="paper-sheet p-4 flex gap-2 border-marker-green/40">
-                <input
-                  type="text"
-                  name="routineTitle"
-                  placeholder="New routine..."
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-xl font-hand"
-                />
-                <button type="submit" className="text-ink-blue font-display hover:scale-110 transition-transform">+</button>
-              </form>
-              <DroppableColumn id="Routine" title="Routine" icon={Circle} color="border-marker-green/20" count={routineTasks.length}>
-                <SortableContext items={routineTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                  {routineTasks.map((task) => (
-                    <SortableTask 
-                      key={task.id} 
-                      task={task} 
-                      deleteTask={deleteTask}
-                      updateTaskNote={updateTaskNote}
-                      editingNoteId={editingNoteId}
-                      setEditingNoteId={setEditingNoteId}
-                    />
-                  ))}
-                </SortableContext>
-              </DroppableColumn>
-            </div>
-
-            {/* Done Column */}
-            <div className="space-y-6">
-              <div className="paper-sheet p-4 flex justify-between items-center bg-marker-pink/5 border-marker-pink/20">
-                <span className="font-hand text-xl">Completed Today</span>
-                <button 
-                  onClick={handleClearAll} 
-                  className="text-xs font-display text-slate-300 hover:text-rose-500 transition-colors uppercase tracking-wider"
-                >
-                  Clear
-                </button>
-              </div>
-              <DroppableColumn id="Done" title="Done" icon={CheckCircle2} isDone={true} color="border-slate-100 bg-paper-50/30" count={doneTasks.length}>
-                <SortableContext items={doneTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                  {doneTasks.map((task) => (
-                    <SortableTask 
-                      key={task.id} 
-                      task={task} 
-                      deleteTask={deleteTask}
-                      updateTaskNote={updateTaskNote}
-                      editingNoteId={editingNoteId}
-                      setEditingNoteId={setEditingNoteId}
-                    />
-                  ))}
-                </SortableContext>
-              </DroppableColumn>
-            </div>
+            <JournalColumn title="Done" icon={CheckCircle2} isDone={true} color="border-slate-100 bg-paper-50/30" count={doneTasks.length}>
+              {doneTasks.map((task) => (
+                <TaskCard key={task.id} task={task} deleteTask={deleteTask} updateTaskNote={updateTaskNote} toggleTask={toggleTask} editingNoteId={editingNoteId} setEditingNoteId={setEditingNoteId} />
+              ))}
+            </JournalColumn>
           </div>
         </div>
+      </div>
 
-        <DragOverlay>
-          {activeId ? (
-            <div className="paper-sheet p-4 shadow-2xl scale-105 border-ink-blue/40 bg-white cursor-grabbing rotate-2">
-              <p className="text-2xl font-hand text-ink-black">
-                {tasks.find(t => t.id === activeId)?.title}
-              </p>
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-
-      {/* Reflections Modal */}
-      <ReflectionModal 
-        isOpen={isReflectionOpen} 
-        onClose={() => setIsReflectionOpen(false)}
-        commentary={todayData.commentary}
-        onUpdate={updateCommentary}
-      />
+      <ReflectionModal isOpen={isReflectionOpen} onClose={() => setIsReflectionOpen(false)} commentary={todayData.commentary} onUpdate={updateCommentary} />
     </div>
   );
 };
@@ -669,18 +460,6 @@ const MicroStat = ({ icon: Icon, label, value }) => (
       <Icon className="w-3 h-3 text-slate-300" />
       <p className="text-lg font-display text-ink-black leading-none">{value}</p>
     </div>
-  </div>
-);
-
-const StatCard = ({ icon: Icon, label, value, color }) => (
-  <div className={`p-6 shadow-md border border-black/5 flex flex-col items-center justify-center min-h-[140px] ${color}`}>
-    <div className="mb-2 opacity-30">
-      <Icon className="w-6 h-6" />
-    </div>
-    <p className="text-xl font-display mb-1 text-ink-black/60">{label}</p>
-    <p className="text-4xl font-display text-ink-black">{value}</p>
-    {/* Tape Effect */}
-    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-8 bg-white/40 border border-white/20 backdrop-blur-[2px] rotate-[-5deg]" />
   </div>
 );
 
