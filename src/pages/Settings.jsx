@@ -1,101 +1,188 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import useStore from '../store/useStore';
 import { 
-  Bell, 
+  Save, 
   Trash2, 
-  RefreshCcw, 
-  ShieldCheck,
-  CloudUpload
+  Plus, 
+  Settings as SettingsIcon, 
+  Zap, 
+  Circle,
+  RefreshCcw
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const Settings = () => {
-  const [notifications, setNotifications] = useState(true);
+  const { 
+    userDefaults, 
+    updateUserDefaults, 
+    fetchUserDefaults,
+    resetUserDefaults 
+  } = useStore();
+  const [newDefaultTitle, setNewDefaultTitle] = useState('');
+  const [newDefaultCategory, setNewDefaultCategory] = useState('Work');
+  const [isSaved, setIsSaved] = useState(false);
 
-  const handleReset = () => {
-    if (window.confirm("Are you sure you want to reset today's tasks? This action cannot be undone.")) {
-      // Implement reset logic here if needed
-      alert("Today's progress has been reset.");
+  useEffect(() => {
+    const unsub = fetchUserDefaults();
+    return () => {
+      if (typeof unsub === 'function') unsub();
+      else if (unsub instanceof Promise) unsub.then(fn => typeof fn === 'function' && fn());
+    };
+  }, [fetchUserDefaults]);
+
+  const handleReset = async () => {
+    if (window.confirm("Restore the recommended 14-step routine? This will replace your current blueprint.")) {
+      await resetUserDefaults();
+      showSavedFeedback();
     }
   };
 
-  const handleClearHistory = () => {
-    if (window.confirm("Are you sure you want to clear ALL history? This will delete all your data permanently.")) {
-      // Implement clear logic
-      alert("All history has been cleared.");
-    }
+  const handleAddDefault = (e) => {
+    e.preventDefault();
+    if (!newDefaultTitle.trim()) return;
+    
+    const updated = [
+      ...userDefaults,
+      { title: newDefaultTitle.trim(), category: newDefaultCategory }
+    ];
+    updateUserDefaults(updated);
+    setNewDefaultTitle('');
+    showSavedFeedback();
+  };
+
+  const removeDefault = (index) => {
+    const updated = userDefaults.filter((_, i) => i !== index);
+    updateUserDefaults(updated);
+    showSavedFeedback();
+  };
+
+  const showSavedFeedback = () => {
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2000);
   };
 
   return (
-    <div className="space-y-12 animate-fade-in pb-12">
-      <header className="border-b-2 border-slate-200 pb-8 border-dashed">
-        <h1 className="text-5xl md:text-6xl text-ink-blue">Settings</h1>
-        <p className="text-2xl font-hand text-slate-500 mt-2">Adjust your desk setup</p>
-      </header>
-
-      <div className="max-w-2xl space-y-12">
-        {/* App Settings */}
-        <section className="paper-sheet overflow-hidden rotate-1">
-          <div className="p-8 border-b-2 border-slate-100 border-dashed flex items-center gap-4">
-            <Bell className="text-ink-blue w-8 h-8" />
-            <h2 className="text-3xl">Journaling</h2>
-          </div>
-          <div className="p-8 space-y-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-2xl font-hand text-ink-black">Daily Reminders</p>
-                <p className="text-lg font-hand text-slate-400">Get a nudge to scribble your day</p>
-              </div>
-              <button 
-                onClick={() => setNotifications(!notifications)}
-                className={`w-14 h-8 rounded-sm transition-colors relative border-2 border-ink-black ${notifications ? 'bg-marker-yellow' : 'bg-paper-200'}`}
-              >
-                <div className={`absolute top-1 w-4 h-4 bg-ink-black transition-transform ${notifications ? 'right-1' : 'left-1'}`} />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* Data Management */}
-        <section className="paper-sheet overflow-hidden -rotate-1">
-          <div className="p-8 border-b-2 border-slate-100 border-dashed flex items-center gap-4">
-            <CloudUpload className="text-ink-blue w-8 h-8" />
-            <h2 className="text-3xl">Storage</h2>
-          </div>
-          <div className="p-8 space-y-6">
-            <button 
-              onClick={handleReset}
-              className="w-full flex items-center gap-4 p-5 rounded-sm border-2 border-slate-100 hover:border-marker-yellow hover:bg-marker-yellow/10 transition-all text-ink-black"
-            >
-              <RefreshCcw className="w-6 h-6 text-ink-pencil" />
-              <div className="text-left">
-                <p className="text-2xl font-hand">Reset Today's Log</p>
-                <p className="text-lg font-hand text-slate-400">Start fresh for today</p>
-              </div>
-            </button>
-
-            <button 
-              onClick={handleClearHistory}
-              className="w-full flex items-center gap-4 p-5 rounded-sm border-2 border-rose-100 hover:bg-rose-50 transition-all text-rose-500"
-            >
-              <Trash2 className="w-6 h-6" />
-              <div className="text-left">
-                <p className="text-2xl font-hand">Burn All Records</p>
-                <p className="text-lg font-hand text-rose-300">Permanently delete everything</p>
-              </div>
-            </button>
-          </div>
-        </section>
-
-        {/* About */}
-        <section className="paper-sheet p-8 text-center space-y-4 rotate-2">
-          <div className="w-16 h-16 bg-paper-200 rounded-sm flex items-center justify-center mx-auto border-2 border-slate-200">
-            <ShieldCheck className="w-10 h-10 text-ink-blue" />
+    <div className="max-w-4xl mx-auto py-12 px-6 animate-fade-in space-y-12">
+      <header className="flex items-center justify-between border-b-2 border-slate-200 pb-8 border-dashed">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-paper-100 rounded-sm rotate-3 border border-slate-200 shadow-sm">
+            <SettingsIcon className="w-8 h-8 text-ink-pencil" />
           </div>
           <div>
-            <h3 className="text-3xl text-ink-blue">FocusFlow Journal</h3>
-            <p className="text-xl font-hand text-slate-400">v1.0.0 • Made for you</p>
+            <h1 className="text-5xl font-hand text-ink-blue leading-none">Journal Settings</h1>
+            <p className="text-xl font-hand text-slate-400 mt-1">Customize your daily blueprint</p>
           </div>
-        </section>
-      </div>
+        </div>
+        
+        <AnimatePresence>
+          {isSaved && (
+            <motion.div 
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="flex items-center gap-2 text-marker-green font-display text-sm bg-marker-green/10 px-3 py-1 rounded-sm"
+            >
+              <Save className="w-4 h-4" />
+              SAVES PERSISTED
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </header>
+
+      {/* Master Routine Editor */}
+      <section className="space-y-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <RefreshCcw className="w-6 h-6 text-ink-pencil/40" />
+            <h2 className="text-3xl font-hand text-ink-black underline decoration-marker-yellow decoration-4 underline-offset-[-2px]">
+              Daily Blueprint
+            </h2>
+          </div>
+          <button 
+            onClick={handleReset}
+            className="flex items-center gap-2 text-sm font-display text-slate-400 hover:text-ink-blue transition-colors px-3 py-1 border border-slate-200 rounded-sm bg-paper-50"
+          >
+            <RefreshCcw className="w-3 h-3" />
+            RESTORE RECOMMENDED
+          </button>
+        </div>
+
+        <div className="paper-sheet p-8 shadow-xl -rotate-1 border-ink-blue/5">
+          <p className="text-xl font-hand text-slate-500 mb-8 border-b border-slate-100 pb-4 italic">
+            These tasks will be available to load at the start of every new day.
+          </p>
+
+          <form onSubmit={handleAddDefault} className="flex gap-4 mb-10 pb-10 border-b border-slate-100 border-dashed">
+            <input
+              type="text"
+              placeholder="Habit title (e.g. Read 5 pages)..."
+              className="flex-1 bg-paper-50 border-2 border-slate-100 focus:border-ink-blue/20 focus:ring-0 rounded-sm px-4 py-3 text-2xl font-hand shadow-inner"
+              value={newDefaultTitle}
+              onChange={(e) => setNewDefaultTitle(e.target.value)}
+            />
+            <select
+              className="bg-paper-50 border-2 border-slate-100 focus:border-ink-blue/20 focus:ring-0 rounded-sm px-4 py-3 text-xl font-hand"
+              value={newDefaultCategory}
+              onChange={(e) => setNewDefaultCategory(e.target.value)}
+            >
+              <option value="Work">Priority</option>
+              <option value="Routine">Routine</option>
+            </select>
+            <button 
+              type="submit"
+              className="bg-ink-blue text-paper-50 px-6 py-3 rounded-sm font-display text-lg hover:scale-105 transition-transform flex items-center gap-2"
+            >
+              <Plus className="w-5 h-5" />
+              ADD
+            </button>
+          </form>
+
+          <div className="space-y-3">
+            {userDefaults.length === 0 ? (
+              <div className="text-center py-12 opacity-30 italic font-hand text-2xl">
+                Your blueprint is empty. Add your first habit above!
+              </div>
+            ) : (
+              userDefaults.map((task, index) => (
+                <motion.div 
+                  key={index}
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="group flex items-center justify-between p-4 bg-paper-50/50 hover:bg-white border-2 border-transparent hover:border-slate-100 transition-all rounded-sm"
+                >
+                  <div className="flex items-center gap-4">
+                    {task.category === 'Work' ? (
+                      <Zap className="w-5 h-5 text-marker-yellow" />
+                    ) : (
+                      <Circle className="w-5 h-5 text-marker-green" />
+                    )}
+                    <span className="text-2xl font-hand text-ink-black">{task.title}</span>
+                    <span className={`text-[10px] font-display px-2 py-0.5 rounded-full uppercase tracking-widest ${
+                      task.category === 'Work' ? 'bg-marker-yellow/20 text-ink-pencil' : 'bg-marker-green/20 text-ink-blue'
+                    }`}>
+                      {task.category}
+                    </span>
+                  </div>
+                  <button 
+                    onClick={() => removeDefault(index)}
+                    className="opacity-0 group-hover:opacity-100 p-2 text-slate-300 hover:text-rose-500 transition-all"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </motion.div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Persistence Note */}
+      <footer className="paper-sheet p-6 bg-paper-50/50 border-slate-100 opacity-60">
+        <p className="text-lg font-hand text-slate-500 italic">
+          Tip: Your blueprint is saved in the cloud. You can access it from any device where you're logged into Jou.
+        </p>
+      </footer>
     </div>
   );
 };

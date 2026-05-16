@@ -25,64 +25,109 @@ const useStore = create((set, get) => ({
   currentDate: format(new Date(), 'yyyy-MM-dd'),
 
   setViewDate: (dateStr) => {
-    set({ 
-      viewDate: dateStr,
-      todayData: { tasks: [], commentary: '', completionPercentage: 0, updatedAt: new Date() }
+    set({ viewDate: dateStr });
+  },
+
+  userDefaults: [],
+
+  fetchUserDefaults: async () => {
+    if (!db) return;
+    const docRef = doc(db, 'settings', 'defaults');
+    return onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        set({ userDefaults: docSnap.data().tasks || [] });
+      } else {
+        const initialDefaults = [
+          { title: "Wake up at 7:00 AM", category: "Routine" },
+          { title: "Get Ready", category: "Routine" },
+          { title: "Breakfast Done", category: "Routine" },
+          { title: "Morning Study Session (1-2 hrs)", category: "Work" },
+          { title: "Back Workout 5 min", category: "Work" },
+          { title: "Lunch Done", category: "Routine" },
+          { title: "Afternoon Study Session (1-2hrs)", category: "Work" },
+          { title: "Snacks Done", category: "Routine" },
+          { title: "Dinner Done", category: "Routine" },
+          { title: "Night Study Session (1-2hrs)", category: "Work" },
+          { title: "Plan next day", category: "Work" },
+          { title: "6 hrs of Study", category: "Work" },
+          { title: "3 Bottle of water", category: "Routine" },
+          { title: "Sleep btw 12:00-1:00 AM", category: "Routine" }
+        ];
+        setDoc(docRef, { tasks: initialDefaults }).catch(err => console.error("Setting defaults failed:", err));
+      }
     });
+  },
+
+  updateUserDefaults: async (tasks) => {
+    if (!db) return;
+    const docRef = doc(db, 'settings', 'defaults');
+    await setDoc(docRef, { tasks });
+  },
+
+  seedTodayWithDefaults: async () => {
+    const { userDefaults, updateTodayData } = get();
+    if (!userDefaults.length) return;
+
+    const seededTasks = userDefaults.map(task => ({
+      id: Math.random().toString(36).substr(2, 9),
+      title: task.title,
+      category: task.category,
+      completed: false,
+      note: '',
+      createdAt: new Date()
+    }));
+
+    await updateTodayData({ tasks: seededTasks });
+  },
+
+  resetUserDefaults: async () => {
+    const recommended = [
+      { title: "Wake up at 7:00 AM", category: "Routine" },
+      { title: "Get Ready", category: "Routine" },
+      { title: "Breakfast Done", category: "Routine" },
+      { title: "Morning Study Session (1-2 hrs)", category: "Work" },
+      { title: "Back Workout 5 min", category: "Work" },
+      { title: "Lunch Done", category: "Routine" },
+      { title: "Afternoon Study Session (1-2hrs)", category: "Work" },
+      { title: "Snacks Done", category: "Routine" },
+      { title: "Dinner Done", category: "Routine" },
+      { title: "Night Study Session (1-2hrs)", category: "Work" },
+      { title: "Plan next day", category: "Work" },
+      { title: "6 hrs of Study", category: "Work" },
+      { title: "3 Bottle of water", category: "Routine" },
+      { title: "Sleep btw 12:00-1:00 AM", category: "Routine" }
+    ];
+    const { updateUserDefaults } = get();
+    await updateUserDefaults(recommended);
   },
 
   // Fetch data for the current viewDate and subscribe to changes
   fetchTodayData: () => {
-    const { viewDate } = get();
+    const { viewDate, isLoading } = get();
     if (!db) {
       set({ isLoading: false });
       return () => {};
     }
+    
     const docRef = doc(db, 'dailyEntries', viewDate);
     
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      const data = docSnap.exists() ? docSnap.data() : null;
-      
-      // If data exists and has tasks, just use it
-      if (data && (data.tasks.length > 0 || data.commentary)) {
-        set({ todayData: data, isLoading: false });
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        set({ todayData: { ...data, date: viewDate }, isLoading: false });
       } else {
-        // Initialize new day with default tasks
-        const defaultTasks = [
-          "Wake up at 7:00 AM",
-          "Get Ready",
-          "Breakfast Done",
-          "Morning Study Session (1-2 hrs)",
-          "Back Workout 5 min",
-          "Lunch Done",
-          "Afternoon Study Session (1-2hrs)",
-          "Snacks Done",
-          "Dinner Done",
-          "Night Study Session (1-2hrs)",
-          "Plan next day",
-          "6 hrs of Study",
-          "3 Bottle of water",
-          "Sleep btw 12:00-1:00 AM"
-        ].map(title => ({
-          id: Math.random().toString(36).substr(2, 9),
-          title,
-          completed: false,
-          note: '',
-          createdAt: new Date()
-        }));
-
-        const newData = {
-          tasks: defaultTasks,
+        const emptyData = {
+          date: viewDate,
+          tasks: [],
           commentary: '',
           completionPercentage: 0,
           updatedAt: new Date(),
         };
-        
-        set({ todayData: newData, isLoading: false });
-        
-        // Save to Firestore so it persists
-        setDoc(docRef, newData).catch(err => console.error("Initial save failed:", err));
+        set({ todayData: emptyData, isLoading: false });
       }
+    }, (error) => {
+      console.error("Snapshot error:", error);
+      set({ isLoading: false });
     });
 
     return unsubscribe;
@@ -131,11 +176,12 @@ const useStore = create((set, get) => ({
     updateDataForDate(viewDate, newData);
   },
 
-  addTask: (title) => {
+  addTask: (title, category = 'Work') => {
     const { todayData, updateTodayData } = get();
     const newTask = {
       id: Math.random().toString(36).substr(2, 9),
       title,
+      category,
       completed: false,
       note: '',
       createdAt: new Date(),

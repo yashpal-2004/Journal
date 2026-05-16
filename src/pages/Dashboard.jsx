@@ -9,9 +9,246 @@ import {
   MessageSquare, 
   PieChart, 
   Zap, 
-  Flame 
+  Flame,
+  RefreshCcw 
 } from 'lucide-react';
 import { format, subDays, addDays, parseISO } from 'date-fns';
+import { 
+  DndContext, 
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  useDroppable,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+
+const safeDateFormat = (dateValue) => {
+  if (!dateValue) return '';
+  try {
+    let dateObj;
+    if (dateValue instanceof Date) {
+      dateObj = dateValue;
+    } else if (dateValue && typeof dateValue.toDate === 'function') {
+      dateObj = dateValue.toDate();
+    } else {
+      dateObj = new Date(dateValue);
+    }
+    
+    if (isNaN(dateObj.getTime())) return '';
+    return format(dateObj, 'p');
+  } catch (e) {
+    return '';
+  }
+};
+
+const DroppableColumn = ({ id, title, children, color, icon: Icon, isDone = false, count = 0 }) => {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  
+  return (
+    <div 
+      ref={setNodeRef}
+      className={`paper-sheet p-6 min-h-[500px] flex flex-col transition-colors duration-200 ${
+        isOver ? 'bg-paper-200 ring-2 ring-ink-blue/20 ring-inset' : ''
+      } ${color}`}
+    >
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          {Icon && <Icon className="w-6 h-6 text-ink-pencil/40" />}
+          <h2 className={`text-3xl font-hand ${isDone ? 'text-slate-400' : 'text-ink-black underline decoration-marker-yellow decoration-4 underline-offset-[-2px]'}`}>
+            {title}
+          </h2>
+        </div>
+        <span className="bg-paper-100 px-3 py-1 rounded-sm text-sm font-display text-slate-400 border border-slate-200">
+          {count}
+        </span>
+      </div>
+      
+      <div className="flex-1 space-y-4 relative">
+        {!isDone && <div className="absolute top-0 left-1 bottom-0 w-[1px] bg-rose-100" />}
+        {children}
+        {count === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 opacity-20 text-center">
+            <Icon className="w-12 h-12 mb-2" />
+            <p className="font-hand text-xl italic">Empty section...</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const SortableTask = ({ task, deleteTask, updateTaskNote, editingNoteId, setEditingNoteId }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: task.id || 'unknown' });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.3 : 1,
+    zIndex: isDragging ? 50 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className={`group relative p-4 rounded-sm border-2 transition-all cursor-grab active:cursor-grabbing ${
+        task.completed 
+          ? 'bg-paper-50 border-slate-100 grayscale-[0.5] opacity-60 hover:opacity-100' 
+          : 'bg-paper-50 border-ink-pencil/5 shadow-sm hover:shadow-md hover:border-ink-blue/10'
+      }`}
+    >
+      <div className="pl-2">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <p className={`text-2xl font-hand leading-tight ${task.completed ? 'line-through text-slate-400' : 'text-ink-black'}`}>
+              {task.title}
+            </p>
+            {task.completed && task.completedAt && (
+              <span className="text-sm font-hand text-slate-300 mt-1 block">
+                Done at {safeDateFormat(task.completedAt)}
+              </span>
+            )}
+          </div>
+          
+          <div 
+            className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <button 
+              onClick={(e) => { e.stopPropagation(); setEditingNoteId(editingNoteId === task.id ? null : task.id); }}
+              className="p-1.5 text-slate-400 hover:text-ink-blue rounded-sm hover:bg-slate-50"
+            >
+              <MessageSquare className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}
+              className="p-1.5 text-slate-400 hover:text-rose-500 rounded-sm hover:bg-slate-50"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {task.note && (
+          <div className="mt-2 px-2 py-1 bg-marker-green/10 border-l-2 border-marker-green text-lg italic font-hand text-slate-600 rounded-sm">
+            {task.note}
+          </div>
+        )}
+      </div>
+
+      {editingNoteId === task.id && (
+        <motion.div 
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          className="mt-4 pt-4 border-t border-slate-100"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <input
+            autoFocus
+            type="text"
+            placeholder="Add a scribbled note..."
+            className="w-full text-xl py-2 bg-transparent border-none focus:ring-0 outline-none font-hand text-ink-blue"
+            value={task.note}
+            onChange={(e) => updateTaskNote(task.id, e.target.value)}
+            onBlur={() => setEditingNoteId(null)}
+            onKeyDown={(e) => e.key === 'Enter' && setEditingNoteId(null)}
+          />
+        </motion.div>
+      )}
+    </div>
+  );
+};
+
+const ReflectionModal = ({ isOpen, onClose, commentary, onUpdate }) => {
+  const [localText, setLocalText] = useState(commentary || '');
+
+  // Sync when prop changes
+  useEffect(() => {
+    setLocalText(commentary || '');
+  }, [commentary]);
+
+  // Debounced save
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localText !== commentary) {
+        onUpdate(localText);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [localText, commentary, onUpdate]);
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 overflow-hidden">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-slate-900/40"
+          />
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+            className="relative w-full max-w-3xl paper-sheet p-8 md:p-12 shadow-2xl rotate-1 h-[80vh] flex flex-col"
+          >
+            <button 
+              onClick={onClose}
+              className="absolute right-6 top-6 p-2 hover:bg-slate-100 rounded-full transition-colors"
+            >
+              <Plus className="w-8 h-8 rotate-45 text-slate-400" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-10">
+              <h2 className="text-5xl text-ink-blue underline decoration-marker-pink decoration-8 underline-offset-[-4px]">
+                Daily Reflections
+              </h2>
+            </div>
+
+            <textarea
+              autoFocus
+              placeholder="Scribble your thoughts about today..."
+              className="flex-1 w-full p-0 bg-transparent border-none focus:ring-0 text-3xl font-hand text-ink-pencil leading-[3rem] resize-none overflow-auto"
+              value={localText}
+              onChange={(e) => setLocalText(e.target.value)}
+              style={{ backgroundImage: 'linear-gradient(transparent, transparent 2.95rem, #e2e8f0 2.95rem)', backgroundSize: '100% 3rem' }}
+            />
+
+            <div className="mt-8 flex justify-between items-center text-sm font-display text-slate-300 border-t border-slate-100 pt-6 border-dashed uppercase tracking-widest">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-marker-green rounded-full animate-pulse" />
+                <p>Auto-saving...</p>
+              </div>
+              <p>{localText.length} characters</p>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+};
 
 const Dashboard = () => {
   const { 
@@ -28,16 +265,29 @@ const Dashboard = () => {
     viewDate,
     currentDate,
     setViewDate,
-    updateTodayData
+    updateTodayData,
+    fetchUserDefaults,
+    seedTodayWithDefaults
   } = useStore();
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [editingNoteId, setEditingNoteId] = useState(null);
+  const [activeId, setActiveId] = useState(null);
+  const [isReflectionOpen, setIsReflectionOpen] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   useEffect(() => {
     const unsubHistory = fetchHistory();
-    return () => unsubHistory();
-  }, [fetchHistory]);
+    const unsubDefaults = fetchUserDefaults();
+    return () => {
+      unsubHistory();
+      if (typeof unsubDefaults === 'function') unsubDefaults();
+    };
+  }, [fetchHistory, fetchUserDefaults]);
 
   useEffect(() => {
     const unsubToday = fetchTodayData();
@@ -45,13 +295,23 @@ const Dashboard = () => {
   }, [fetchTodayData, viewDate]);
 
   const handlePrevDay = () => {
-    const prevDate = format(subDays(parseISO(viewDate), 1), 'yyyy-MM-dd');
-    setViewDate(prevDate);
+    try {
+      const prevDate = format(subDays(parseISO(viewDate), 1), 'yyyy-MM-dd');
+      setViewDate(prevDate);
+    } catch (err) {
+      console.error("Navigation error:", err);
+      setViewDate(currentDate);
+    }
   };
 
   const handleNextDay = () => {
-    const nextDate = format(addDays(parseISO(viewDate), 1), 'yyyy-MM-dd');
-    setViewDate(nextDate);
+    try {
+      const nextDate = format(addDays(parseISO(viewDate), 1), 'yyyy-MM-dd');
+      setViewDate(nextDate);
+    } catch (err) {
+      console.error("Navigation error:", err);
+      setViewDate(currentDate);
+    }
   };
 
   const handleGoToToday = () => {
@@ -60,11 +320,19 @@ const Dashboard = () => {
 
   const { currentStreak, maxStreak } = getStreaks();
 
-  const handleAddTask = (e) => {
+  const handleAddTask = (e, category = 'Work') => {
     e.preventDefault();
-    if (newTaskTitle.trim()) {
-      addTask(newTaskTitle.trim());
-      setNewTaskTitle('');
+    const form = e.target;
+    const input = category === 'Work' ? form.priorityTitle : form.routineTitle;
+    const value = input ? input.value : newTaskTitle;
+    
+    if (value.trim()) {
+      addTask(value.trim(), category);
+      if (input) {
+        input.value = '';
+      } else {
+        setNewTaskTitle('');
+      }
     }
   };
 
@@ -73,6 +341,68 @@ const Dashboard = () => {
       updateTodayData({ tasks: [] });
     }
   };
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    const taskId = active.id;
+    let newTasks = [...(todayData?.tasks || [])];
+    const taskIndex = newTasks.findIndex(t => t.id === taskId);
+    if (taskIndex === -1) return;
+
+    const task = { ...newTasks[taskIndex] };
+
+    // 1. If dragging a DONE task and dropped ANYWHERE else
+    if (task.completed && (!over || over.id !== 'Done')) {
+      task.completed = false;
+      task.completedAt = null;
+      
+      // Handle reordering if dropped on a task
+      if (over && over.id !== taskId && !['Work', 'Routine', 'Done'].includes(over.id)) {
+        const overIndex = newTasks.findIndex(t => t.id === over.id);
+        if (overIndex !== -1) {
+          newTasks[taskIndex] = task;
+          newTasks = arrayMove(newTasks, taskIndex, overIndex);
+          updateTodayData({ tasks: newTasks });
+          setActiveId(null);
+          return;
+        }
+      }
+      // If dropped on container or empty space, move to BOTTOM of its category
+      newTasks.splice(taskIndex, 1);
+      newTasks.push(task);
+    } 
+    // 2. Normal drop onto a container (column header or empty space)
+    else if (over && ['Work', 'Routine', 'Done'].includes(over.id)) {
+      if (over.id === 'Done') {
+        task.completed = true;
+        task.completedAt = task.completedAt || new Date();
+      } else {
+        task.completed = false;
+        task.completedAt = null;
+      }
+      // Move to BOTTOM of the new container
+      newTasks.splice(taskIndex, 1);
+      newTasks.push(task);
+    } 
+    // 3. Dropped onto another task (Explicit reordering)
+    else if (over && active.id !== over.id) {
+      const overIndex = newTasks.findIndex(t => t.id === over.id);
+      if (overIndex !== -1) {
+        const targetTask = newTasks[overIndex];
+        if (task.completed !== targetTask.completed) {
+          task.completed = targetTask.completed;
+          task.completedAt = targetTask.completed ? (task.completedAt || new Date()) : null;
+        }
+        newTasks[taskIndex] = task;
+        newTasks = arrayMove(newTasks, taskIndex, overIndex);
+      }
+    }
+
+    updateTodayData({ tasks: newTasks });
+    setActiveId(null);
+  };
+
+  const isDataMismatched = todayData?.date !== viewDate;
 
   if (isLoading) {
     return (
@@ -83,9 +413,14 @@ const Dashboard = () => {
     );
   }
 
-  const completedCount = todayData.tasks.filter(t => t.completed).length;
-  const totalCount = todayData.tasks.length;
-  const progress = todayData.completionPercentage;
+  const tasks = isDataMismatched ? [] : (todayData?.tasks || []);
+  const routineTasks = tasks.filter(t => !t.completed && t.category === 'Routine');
+  const workTasks = tasks.filter(t => !t.completed && (t.category === 'Work' || !t.category));
+  const doneTasks = tasks.filter(t => t.completed);
+
+  const completedCount = doneTasks.length;
+  const totalCount = tasks.length;
+  const progress = todayData?.completionPercentage || 0;
 
   const getProgressColor = (val) => {
     if (val < 40) return 'text-accent-rose';
@@ -94,238 +429,248 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="space-y-12 animate-fade-in pb-12">
-      {/* Header Section */}
-      <header className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b-2 border-slate-200 pb-8 border-dashed">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={handlePrevDay}
-              className="p-2 hover:bg-marker-yellow/20 rounded-sm transition-colors border border-transparent hover:border-slate-200"
-              title="Previous Day"
-            >
-              <Plus className="w-6 h-6 rotate-45 text-ink-pencil" />
-            </button>
-            
-            <p className="text-2xl font-hand text-slate-500">
+    <div className={`animate-fade-in pb-12 space-y-8 transition-opacity duration-300 ${isDataMismatched ? 'opacity-40' : 'opacity-100'}`}>
+      {isDataMismatched && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 bg-white/80 backdrop-blur-sm border border-slate-200 px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+          <RefreshCcw className="w-4 h-4 animate-spin text-ink-blue" />
+          <span className="text-sm font-hand text-ink-black uppercase tracking-widest">Snapshotting...</span>
+        </div>
+      )}
+      {/* Top Control Bar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 border-b border-slate-200 pb-6 border-dashed">
+        {/* Date & Nav - Top Left */}
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={handlePrevDay}
+            className="p-1.5 hover:bg-marker-yellow/20 rounded-sm transition-colors border border-transparent hover:border-slate-200"
+            title="Previous Day"
+          >
+            <Plus className="w-5 h-5 rotate-45 text-ink-pencil" />
+          </button>
+          
+          <div className="flex flex-col">
+            <p className="text-2xl font-hand text-ink-black leading-none">
               {format(parseISO(viewDate), 'EEEE, MMMM do')}
-              {viewDate === currentDate && <span className="ml-3 text-sm bg-marker-green/20 px-2 py-0.5 rounded-sm text-ink-blue">TODAY</span>}
+              {viewDate === currentDate && <span className="ml-2 text-xs bg-marker-green/20 px-1.5 py-0.5 rounded-sm text-ink-blue">TODAY</span>}
             </p>
-
-            <button 
-              onClick={handleNextDay}
-              className="p-2 hover:bg-marker-yellow/20 rounded-sm transition-colors border border-transparent hover:border-slate-200"
-              title="Next Day"
-            >
-              <Plus className="w-6 h-6 -rotate-45 text-ink-pencil" />
-            </button>
-
             {viewDate !== currentDate && (
               <button 
                 onClick={handleGoToToday}
-                className="ml-2 font-hand text-xl text-ink-blue underline decoration-marker-yellow decoration-4 underline-offset-4"
+                className="text-left font-hand text-sm text-ink-blue underline decoration-marker-yellow decoration-2 underline-offset-2"
               >
-                Go to Today
+                Back to Today
               </button>
             )}
           </div>
-          <h1 className="text-5xl md:text-6xl text-ink-blue">Daily Log</h1>
-        </div>
-        
-        <div className="paper-sheet p-6 flex items-center gap-6 rotate-1">
-          <div className="relative w-20 h-20 flex items-center justify-center">
-            <svg className="w-full h-full transform -rotate-90">
-              <circle
-                cx="40"
-                cy="40"
-                r="36"
-                stroke="#e2e8f0"
-                strokeWidth="4"
-                fill="transparent"
-              />
-              <motion.circle
-                cx="40"
-                cy="40"
-                r="36"
-                stroke="currentColor"
-                strokeWidth="6"
-                fill="transparent"
-                strokeDasharray="226"
-                initial={{ strokeDashoffset: 226 }}
-                animate={{ strokeDashoffset: 226 - (226 * progress) / 100 }}
-                transition={{ duration: 1.5, ease: "easeOut" }}
-                className={getProgressColor(progress)}
-              />
-            </svg>
-            <span className={`absolute text-xl font-display ${getProgressColor(progress)}`}>
-              {progress}%
-            </span>
-          </div>
-          <div>
-            <p className="text-sm font-display text-slate-400 uppercase tracking-widest">Score</p>
-            <p className="text-2xl font-display text-ink-black">{completedCount}/{totalCount}</p>
-          </div>
-        </div>
-      </header>
 
-      {/* Stats Quick View - Sticky Notes Look */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        <StatCard icon={Flame} label="Hot Streak" value={currentStreak} color="bg-marker-yellow rotate-1" />
-        <StatCard icon={Zap} label="Best" value={maxStreak} color="bg-marker-green -rotate-2" />
-        <StatCard icon={CheckCircle2} label="Done" value={completedCount} color="bg-marker-pink rotate-2" />
-        <StatCard icon={Circle} label="Left" value={totalCount - completedCount} color="bg-paper-200 -rotate-1" />
+          <button 
+            onClick={handleNextDay}
+            className="p-1.5 hover:bg-marker-yellow/20 rounded-sm transition-colors border border-transparent hover:border-slate-200"
+            title="Next Day"
+          >
+            <Plus className="w-5 h-5 -rotate-45 text-ink-pencil" />
+          </button>
+        </div>
+
+        {/* Stats, Score & Reflections Button - Top Right */}
+        <div className="flex flex-wrap items-center gap-4 lg:gap-8">
+          <button 
+            onClick={() => setIsReflectionOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-paper-50 border border-slate-200 rounded-sm font-hand text-xl text-ink-blue hover:bg-marker-yellow/10 transition-colors shadow-sm"
+          >
+            <MessageSquare className="w-5 h-5 opacity-50" />
+            Daily Reflections
+          </button>
+
+          <div className="flex items-center gap-6 bg-paper-50 p-3 rounded-sm border border-slate-100 shadow-sm rotate-1">
+            {/* Circular Progress */}
+            <div className="flex items-center gap-3 pr-6 border-r border-slate-200 border-dashed">
+              <div className="relative w-12 h-12 flex items-center justify-center">
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle cx="24" cy="24" r="20" stroke="#f1f5f9" strokeWidth="3" fill="transparent" />
+                  <motion.circle
+                    cx="24"
+                    cy="24"
+                    r="20"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    fill="transparent"
+                    strokeDasharray="125.6"
+                    initial={{ strokeDashoffset: 125.6 }}
+                    animate={{ strokeDashoffset: 125.6 - (125.6 * progress) / 100 }}
+                    transition={{ duration: 1.5, ease: "easeOut" }}
+                    className={getProgressColor(progress)}
+                  />
+                </svg>
+                <span className={`absolute text-xs font-display ${getProgressColor(progress)}`}>
+                  {progress}%
+                </span>
+              </div>
+              <div>
+                <p className="text-[10px] font-display text-slate-400 uppercase">Score</p>
+                <p className="text-lg font-display text-ink-black leading-tight">{completedCount}/{totalCount}</p>
+              </div>
+            </div>
+
+            {/* Micro Stats */}
+            <div className="flex gap-4 lg:gap-6">
+              <MicroStat icon={Flame} label="Streak" value={currentStreak} />
+              <MicroStat icon={Zap} label="Best" value={maxStreak} />
+              <MicroStat icon={CheckCircle2} label="Done" value={completedCount} />
+              <MicroStat icon={Circle} label="Left" value={totalCount - completedCount} />
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 items-start">
-        {/* Tasks Section - Takes 2 columns on large screens */}
-        <section className="lg:col-span-2 paper-sheet p-8 md:p-12 min-h-[600px] relative">
-          <div className="absolute top-0 left-10 bottom-0 w-[2px] bg-rose-200 opacity-50" />
-          
-          <div className="flex items-center justify-between mb-10 pl-8">
-            <h2 className="text-4xl underline decoration-marker-yellow decoration-8 underline-offset-[-2px]">Priorities</h2>
-            <button 
-              onClick={handleClearAll}
-              className="font-hand text-xl text-slate-400 hover:text-rose-500 transition-colors"
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={({ active }) => setActiveId(active.id)}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="grid grid-cols-1 gap-8 items-start">
+          {/* Empty Day Prompt */}
+          {tasks.length === 0 && (
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="paper-sheet p-12 text-center border-dashed border-slate-200 rotate-1 mb-8"
             >
-              Clear all
-            </button>
-          </div>
+              <RefreshCcw className="w-16 h-16 text-ink-pencil/20 mx-auto mb-6 animate-spin-slow" />
+              <h2 className="text-4xl font-hand text-ink-black mb-4">A blank page awaits...</h2>
+              <p className="text-xl font-hand text-slate-400 mb-8 max-w-lg mx-auto">
+                Would you like to load your daily blueprint from settings, or start fresh with new goals?
+              </p>
+              <button 
+                onClick={seedTodayWithDefaults}
+                className="bg-ink-blue text-paper-50 px-10 py-4 rounded-sm font-display text-xl hover:scale-105 transition-transform shadow-xl flex items-center gap-3 mx-auto"
+              >
+                <Plus className="w-6 h-6" />
+                LOAD TODAY'S PLAN
+              </button>
+            </motion.div>
+          )}
 
-          <form onSubmit={handleAddTask} className="relative mb-12 pl-8">
-            <input
-              type="text"
-              placeholder="Write a task..."
-              className="w-full bg-transparent border-b-2 border-slate-200 py-3 text-2xl focus:outline-none focus:border-ink-blue transition-all placeholder:text-slate-300 font-hand"
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-            />
-            <button 
-              type="submit"
-              className="absolute right-0 top-1/2 -translate-y-1/2 font-display text-ink-blue hover:scale-110 transition-transform"
-            >
-              + Add
-            </button>
-          </form>
+          {/* Main Board - 3 Columns (Full Width) */}
+          <div className={`grid grid-cols-1 lg:grid-cols-3 gap-8 ${tasks.length === 0 ? 'opacity-20 pointer-events-none' : ''}`}>
+            {/* Priorities Column */}
+            <div className="space-y-6">
+              <form onSubmit={(e) => handleAddTask(e, 'Work')} className="paper-sheet p-4 flex gap-2 border-marker-yellow/40">
+                <input
+                  type="text"
+                  name="priorityTitle"
+                  placeholder="New priority..."
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-xl font-hand"
+                  value={newTaskTitle}
+                  onChange={(e) => setNewTaskTitle(e.target.value)}
+                />
+                <button type="submit" className="text-ink-blue font-display hover:scale-110 transition-transform">+</button>
+              </form>
 
-          <div className="space-y-4 pl-8">
-            <AnimatePresence mode='popLayout'>
-              {todayData.tasks.length === 0 ? (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="py-12 flex flex-col items-center text-center space-y-4"
+              <DroppableColumn id="Work" title="Priorities" icon={Zap} color="border-marker-yellow/20" count={workTasks.length}>
+                <SortableContext items={workTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                  {workTasks.map((task) => (
+                    <SortableTask 
+                      key={task.id} 
+                      task={task} 
+                      deleteTask={deleteTask}
+                      updateTaskNote={updateTaskNote}
+                      editingNoteId={editingNoteId}
+                      setEditingNoteId={setEditingNoteId}
+                    />
+                  ))}
+                </SortableContext>
+              </DroppableColumn>
+            </div>
+
+            {/* Routine Column */}
+            <div className="space-y-6">
+              <form onSubmit={(e) => handleAddTask(e, 'Routine')} className="paper-sheet p-4 flex gap-2 border-marker-green/40">
+                <input
+                  type="text"
+                  name="routineTitle"
+                  placeholder="New routine..."
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-xl font-hand"
+                />
+                <button type="submit" className="text-ink-blue font-display hover:scale-110 transition-transform">+</button>
+              </form>
+              <DroppableColumn id="Routine" title="Routine" icon={Circle} color="border-marker-green/20" count={routineTasks.length}>
+                <SortableContext items={routineTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                  {routineTasks.map((task) => (
+                    <SortableTask 
+                      key={task.id} 
+                      task={task} 
+                      deleteTask={deleteTask}
+                      updateTaskNote={updateTaskNote}
+                      editingNoteId={editingNoteId}
+                      setEditingNoteId={setEditingNoteId}
+                    />
+                  ))}
+                </SortableContext>
+              </DroppableColumn>
+            </div>
+
+            {/* Done Column */}
+            <div className="space-y-6">
+              <div className="paper-sheet p-4 flex justify-between items-center bg-marker-pink/5 border-marker-pink/20">
+                <span className="font-hand text-xl">Completed Today</span>
+                <button 
+                  onClick={handleClearAll} 
+                  className="text-xs font-display text-slate-300 hover:text-rose-500 transition-colors uppercase tracking-wider"
                 >
-                  <p className="text-3xl font-hand text-slate-300">Nothing on the list today...</p>
-                </motion.div>
-              ) : (
-                todayData.tasks.map((task) => (
-                  <motion.div
-                    key={task.id}
-                    layout
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="group flex items-start gap-4 py-2"
-                  >
-                    <button 
-                      onClick={() => toggleTask(task.id)}
-                      className={`shrink-0 w-8 h-8 flex items-center justify-center transition-all ${
-                        task.completed ? 'text-ink-blue' : 'text-slate-300 hover:text-slate-400'
-                      }`}
-                    >
-                      {task.completed ? (
-                        <span className="text-3xl font-display -mt-2">X</span>
-                      ) : (
-                        <div className="w-6 h-6 border-2 border-slate-300 rounded-sm" />
-                      )}
-                    </button>
-
-                    <div className="flex-1 min-w-0 pt-1">
-                      <div className="flex items-center gap-3">
-                        <p className={`text-2xl font-hand leading-tight ${task.completed ? 'line-through text-slate-400 decoration-ink-pencil' : 'text-ink-black'}`}>
-                          {task.title}
-                        </p>
-                        {task.completed && task.completedAt && (
-                          <span className="text-sm font-hand text-slate-300 bg-slate-50 px-2 py-0.5 rounded-sm">
-                            {format(
-                              task.completedAt instanceof Date 
-                                ? task.completedAt 
-                                : task.completedAt.toDate ? task.completedAt.toDate() : new Date(task.completedAt), 
-                              'p'
-                            )}
-                          </span>
-                        )}
-                      </div>
-                      {task.note && (
-                        <span className="inline-block mt-1 px-2 py-0.5 bg-marker-green/30 text-lg italic font-hand text-slate-600 rounded-sm">
-                          {task.note}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity pt-1">
-                      <button 
-                        onClick={() => setEditingNoteId(editingNoteId === task.id ? null : task.id)}
-                        className="text-slate-400 hover:text-ink-blue"
-                      >
-                        <MessageSquare className="w-5 h-5" />
-                      </button>
-                      <button 
-                        onClick={() => deleteTask(task.id)}
-                        className="text-slate-400 hover:text-rose-500"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    {editingNoteId === task.id && (
-                      <motion.div 
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        className="absolute left-10 right-0 mt-8 z-10"
-                      >
-                        <div className="bg-paper-50 border-2 border-ink-blue/20 p-4 shadow-xl rounded-sm">
-                          <input
-                            autoFocus
-                            type="text"
-                            placeholder="Add a scribbled note..."
-                            className="w-full text-xl py-2 bg-transparent border-none focus:ring-0 outline-none font-hand text-ink-blue"
-                            value={task.note}
-                            onChange={(e) => updateTaskNote(task.id, e.target.value)}
-                            onBlur={() => setEditingNoteId(null)}
-                            onKeyDown={(e) => e.key === 'Enter' && setEditingNoteId(null)}
-                          />
-                        </div>
-                      </motion.div>
-                    )}
-                  </motion.div>
-                ))
-              )}
-            </AnimatePresence>
+                  Clear
+                </button>
+              </div>
+              <DroppableColumn id="Done" title="Done" icon={CheckCircle2} isDone={true} color="border-slate-100 bg-paper-50/30" count={doneTasks.length}>
+                <SortableContext items={doneTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                  {doneTasks.map((task) => (
+                    <SortableTask 
+                      key={task.id} 
+                      task={task} 
+                      deleteTask={deleteTask}
+                      updateTaskNote={updateTaskNote}
+                      editingNoteId={editingNoteId}
+                      setEditingNoteId={setEditingNoteId}
+                    />
+                  ))}
+                </SortableContext>
+              </DroppableColumn>
+            </div>
           </div>
-        </section>
+        </div>
 
-        {/* Commentary Section - Notebook Style, takes 1 column */}
-        <section className="paper-sheet p-8 md:p-10 rotate-1 flex flex-col min-h-[600px]">
-          <div className="flex items-center gap-3 mb-8">
-            <h2 className="text-4xl text-ink-blue underline decoration-marker-pink decoration-8 underline-offset-[-2px]">Reflections</h2>
-          </div>
-          <textarea
-            placeholder="Write your thoughts here..."
-            className="flex-1 w-full p-0 bg-transparent border-none focus:ring-0 text-2xl font-hand text-ink-pencil leading-[2.5rem] resize-none overflow-auto"
-            value={todayData.commentary}
-            onChange={(e) => updateCommentary(e.target.value)}
-            style={{ backgroundImage: 'linear-gradient(transparent, transparent 2.45rem, #e2e8f0 2.45rem)', backgroundSize: '100% 2.5rem' }}
-          />
-          <div className="mt-6 flex justify-between items-center text-xl font-hand text-slate-400 border-t border-slate-100 pt-4 border-dashed">
-            <p className="animate-pulse italic">Ink is drying...</p>
-            <p>{todayData.commentary.length} chars</p>
-          </div>
-        </section>
-      </div>
+        <DragOverlay>
+          {activeId ? (
+            <div className="paper-sheet p-4 shadow-2xl scale-105 border-ink-blue/40 bg-white cursor-grabbing rotate-2">
+              <p className="text-2xl font-hand text-ink-black">
+                {tasks.find(t => t.id === activeId)?.title}
+              </p>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {/* Reflections Modal */}
+      <ReflectionModal 
+        isOpen={isReflectionOpen} 
+        onClose={() => setIsReflectionOpen(false)}
+        commentary={todayData.commentary}
+        onUpdate={updateCommentary}
+      />
     </div>
   );
 };
+
+const MicroStat = ({ icon: Icon, label, value }) => (
+  <div className="flex flex-col items-center">
+    <p className="text-[10px] font-display text-slate-400 uppercase mb-0.5">{label}</p>
+    <div className="flex items-center gap-1.5">
+      <Icon className="w-3 h-3 text-slate-300" />
+      <p className="text-lg font-display text-ink-black leading-none">{value}</p>
+    </div>
+  </div>
+);
 
 const StatCard = ({ icon: Icon, label, value, color }) => (
   <div className={`p-6 shadow-md border border-black/5 flex flex-col items-center justify-center min-h-[140px] ${color}`}>
