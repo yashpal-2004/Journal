@@ -243,20 +243,13 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!user) return;
-    const unsubHistory = fetchHistory();
-    const unsubDefaults = fetchUserDefaults();
-    return () => {
-      if (unsubHistory) unsubHistory();
-      if (typeof unsubDefaults === 'function') unsubDefaults();
-    };
+    fetchHistory();
+    fetchUserDefaults();
   }, [fetchHistory, fetchUserDefaults, user]);
 
   useEffect(() => {
     if (!user) return;
-    const unsubToday = fetchTodayData();
-    return () => {
-      if (unsubToday) unsubToday();
-    };
+    fetchTodayData();
   }, [fetchTodayData, viewDate, user]);
 
   const handlePrevDay = () => {

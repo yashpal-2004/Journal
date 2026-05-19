@@ -13,6 +13,10 @@ import {
 import { format } from 'date-fns';
 import { onAuthStateChanged, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 
+let todayUnsub = null;
+let historyUnsub = null;
+let defaultsUnsub = null;
+
 const useStore = create((set, get) => ({
   todayData: {
     tasks: [],
@@ -97,12 +101,17 @@ const useStore = create((set, get) => ({
 
   userDefaults: [],
 
-  fetchUserDefaults: async () => {
+  fetchUserDefaults: () => {
     const paths = get().getUserPaths();
     if (!paths) return;
 
+    if (defaultsUnsub) {
+      defaultsUnsub();
+      defaultsUnsub = null;
+    }
+
     const docRef = doc(db, paths.settings, 'defaults');
-    return onSnapshot(docRef, (docSnap) => {
+    defaultsUnsub = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
         set({ userDefaults: docSnap.data().tasks || [] });
       } else {
@@ -176,12 +185,20 @@ const useStore = create((set, get) => ({
     const paths = get().getUserPaths();
     if (!paths) {
       set({ isLoading: false });
-      return () => {};
+      return;
+    }
+    
+    if (todayUnsub) {
+      todayUnsub();
+      todayUnsub = null;
     }
     
     const docRef = doc(db, paths.entries, viewDate);
     
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+    todayUnsub = onSnapshot(docRef, (docSnap) => {
+      // Ensure we haven't navigated away from this date since the listener was created
+      if (get().viewDate !== viewDate) return;
+      
       if (docSnap.exists()) {
         const data = docSnap.data();
         set({ todayData: { ...data, date: viewDate }, isLoading: false });
@@ -199,8 +216,6 @@ const useStore = create((set, get) => ({
       console.error("Snapshot error:", error);
       set({ isLoading: false });
     });
-
-    return unsubscribe;
   },
 
   updateDataForDate: async (dateStr, newData) => {
@@ -288,17 +303,21 @@ const useStore = create((set, get) => ({
 
   fetchHistory: () => {
     const paths = get().getUserPaths();
-    if (!paths) return () => {};
+    if (!paths) return;
+    
+    if (historyUnsub) {
+      historyUnsub();
+      historyUnsub = null;
+    }
     
     const q = query(collection(db, paths.entries), orderBy('updatedAt', 'desc'), limit(30));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    historyUnsub = onSnapshot(q, (querySnapshot) => {
       const history = [];
       querySnapshot.forEach((doc) => {
         history.push({ id: doc.id, ...doc.data() });
       });
       set({ history });
     }, (err) => console.error("History fetch failed:", err));
-    return unsubscribe;
   },
 
   getStreaks: () => {
