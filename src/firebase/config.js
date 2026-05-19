@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, signInAnonymously, GoogleAuthProvider } from "firebase/auth";
 
@@ -21,9 +21,7 @@ let googleProvider;
 
 try {
   const app = initializeApp(firebaseConfig);
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-  });
+  db = getFirestore(app);
   auth = getAuth(app);
   googleProvider = new GoogleAuthProvider();
   
