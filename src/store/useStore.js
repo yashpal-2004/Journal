@@ -145,9 +145,28 @@ const useStore = create((set, get) => ({
 
   seedTodayWithDefaults: async () => {
     const { userDefaults, updateTodayData } = get();
-    if (!userDefaults.length) return;
+    
+    let defaultsToUse = userDefaults;
+    if (!defaultsToUse || defaultsToUse.length === 0) {
+      defaultsToUse = [
+        { title: "Wake up at 7:00 AM", category: "Routine" },
+        { title: "Get Ready", category: "Routine" },
+        { title: "Breakfast Done", category: "Routine" },
+        { title: "Morning Study Session (1-2 hrs)", category: "Work" },
+        { title: "Back Workout 5 min", category: "Work" },
+        { title: "Lunch Done", category: "Routine" },
+        { title: "Afternoon Study Session (1-2hrs)", category: "Work" },
+        { title: "Snacks Done", category: "Routine" },
+        { title: "Dinner Done", category: "Routine" },
+        { title: "Night Study Session (1-2hrs)", category: "Work" },
+        { title: "Plan next day", category: "Work" },
+        { title: "6 hrs of Study", category: "Work" },
+        { title: "3 Bottle of water", category: "Routine" },
+        { title: "Sleep btw 12:00-1:00 AM", category: "Routine" }
+      ];
+    }
 
-    const seededTasks = userDefaults.map(task => ({
+    const seededTasks = defaultsToUse.map(task => ({
       id: Math.random().toString(36).substr(2, 9),
       title: task.title,
       category: task.category,
