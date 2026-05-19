@@ -11,7 +11,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { format } from 'date-fns';
-import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
 
 const useStore = create((set, get) => ({
   todayData: {
@@ -58,7 +58,7 @@ const useStore = create((set, get) => ({
 
   // Initialize auth listener
   initAuth: () => {
-    const unsub = onAuthStateChanged(auth, (user) => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
         set({ user, isLoading: false, authError: null });
         get().fetchTodayData();
@@ -66,6 +66,12 @@ const useStore = create((set, get) => ({
         get().fetchHistory();
       } else {
         set({ user: null });
+        try {
+          await signInAnonymously(auth);
+        } catch (error) {
+          console.error("Anonymous auth failed:", error);
+          set({ authError: error.message, isLoading: false });
+        }
       }
     }, (error) => {
       console.error("Auth state listener error:", error);

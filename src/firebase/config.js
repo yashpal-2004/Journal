@@ -27,8 +27,7 @@ try {
   auth = getAuth(app);
   googleProvider = new GoogleAuthProvider();
   
-  // Keep anonymous as fallback for instant use
-  signInAnonymously(auth).catch(err => console.log("Auth initialized"));
+  // Anonymous fallback will be handled in useStore.js inside onAuthStateChanged
   
   const analytics = getAnalytics(app);
 } catch (error) {
