@@ -97,7 +97,7 @@ const TaskCard = ({ task, deleteTask, updateTaskNote, editingNoteId, setEditingN
               )}
             </div>
             
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-1 opacity-60 md:opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
               <button 
                 onClick={() => setEditingNoteId(editingNoteId === task.id ? null : task.id)}
                 className="p-1.5 text-slate-400 hover:text-ink-blue rounded-sm hover:bg-slate-50"
@@ -238,6 +238,7 @@ const Dashboard = () => {
   } = useStore();
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newRoutineTitle, setNewRoutineTitle] = useState('');
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [isReflectionOpen, setIsReflectionOpen] = useState(false);
 
@@ -280,16 +281,14 @@ const Dashboard = () => {
 
   const handleAddTask = (e, category = 'Work') => {
     e.preventDefault();
-    const form = e.target;
-    const input = category === 'Work' ? form.priorityTitle : form.routineTitle;
-    const value = input ? input.value : newTaskTitle;
+    const value = category === 'Work' ? newTaskTitle : newRoutineTitle;
     
     if (value.trim()) {
       addTask(value.trim(), category);
-      if (input) {
-        input.value = '';
-      } else {
+      if (category === 'Work') {
         setNewTaskTitle('');
+      } else {
+        setNewRoutineTitle('');
       }
     }
   };
@@ -445,7 +444,7 @@ const Dashboard = () => {
 
           <div className="space-y-6">
             <form onSubmit={(e) => handleAddTask(e, 'Routine')} className="paper-sheet p-4 flex gap-2 border-marker-green/40">
-              <input type="text" name="routineTitle" placeholder="New routine..." className="flex-1 bg-transparent border-none focus:ring-0 text-xl font-hand" />
+              <input type="text" name="routineTitle" placeholder="New routine..." className="flex-1 bg-transparent border-none focus:ring-0 text-xl font-hand" value={newRoutineTitle} onChange={(e) => setNewRoutineTitle(e.target.value)} />
               <button type="submit" className="text-ink-blue font-display hover:scale-110 transition-transform">+</button>
             </form>
             <JournalColumn title="Routine" icon={Circle} color="border-marker-green/20" count={routineTasks.length}>

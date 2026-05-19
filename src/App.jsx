@@ -9,12 +9,36 @@ import Settings from './pages/Settings';
 import useStore from './store/useStore';
 
 function App() {
-  const { initAuth } = useStore();
+  const { initAuth, fetchTodayData, fetchHistory, fetchUserDefaults } = useStore();
 
   React.useEffect(() => {
     const unsubAuth = initAuth();
-    return () => unsubAuth();
-  }, [initAuth]);
+    
+    // Auto-sync on tab/window activation to bypass background browser throttling
+    const handleActiveSync = () => {
+      const state = useStore.getState();
+      if (state.user) {
+        fetchTodayData();
+        fetchHistory();
+        fetchUserDefaults();
+      }
+    };
+
+    window.addEventListener('focus', handleActiveSync);
+    
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleActiveSync();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      unsubAuth();
+      window.removeEventListener('focus', handleActiveSync);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [initAuth, fetchTodayData, fetchHistory, fetchUserDefaults]);
 
   return (
     <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>

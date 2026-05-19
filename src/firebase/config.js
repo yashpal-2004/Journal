@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableMultiTabIndexedDbPersistence } from "firebase/firestore";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, signInAnonymously, GoogleAuthProvider } from "firebase/auth";
 
@@ -25,7 +25,16 @@ try {
   auth = getAuth(app);
   googleProvider = new GoogleAuthProvider();
   
-  // Anonymous fallback will be handled in useStore.js inside onAuthStateChanged
+  // Enable multi-tab offline persistence
+  enableMultiTabIndexedDbPersistence(db).catch((err) => {
+    if (err.code === 'failed-precondition') {
+      console.warn("Firestore persistence failed-precondition (multiple tabs open)");
+    } else if (err.code === 'unimplemented') {
+      console.warn("Firestore persistence unimplemented");
+    } else {
+      console.error("Firestore persistence error:", err);
+    }
+  });
   
   const analytics = getAnalytics(app);
 } catch (error) {

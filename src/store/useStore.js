@@ -11,7 +11,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { format } from 'date-fns';
-import { onAuthStateChanged, signInWithPopup, signOut, signInAnonymously } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signOut, signInAnonymously, linkWithPopup } from 'firebase/auth';
 
 let todayUnsub = null;
 let historyUnsub = null;
@@ -35,7 +35,21 @@ const useStore = create((set, get) => ({
   // Auth Actions
   loginWithGoogle: async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      const currentUser = auth.currentUser;
+      if (currentUser && currentUser.isAnonymous) {
+        try {
+          await linkWithPopup(currentUser, googleProvider);
+        } catch (linkError) {
+          if (linkError.code === 'auth/credential-already-in-use') {
+            // Google account is already registered, perform direct sign-in
+            await signInWithPopup(auth, googleProvider);
+          } else {
+            throw linkError;
+          }
+        }
+      } else {
+        await signInWithPopup(auth, googleProvider);
+      }
     } catch (error) {
       console.error("Login failed:", error);
       set({ authError: error.message });
@@ -44,6 +58,11 @@ const useStore = create((set, get) => ({
 
   logout: async () => {
     try {
+      // Unsubscribe all active listeners before logging out
+      if (todayUnsub) { todayUnsub(); todayUnsub = null; }
+      if (historyUnsub) { historyUnsub(); historyUnsub = null; }
+      if (defaultsUnsub) { defaultsUnsub(); defaultsUnsub = null; }
+      
       await signOut(auth);
     } catch (error) {
       console.error("Logout failed:", error);
@@ -69,7 +88,24 @@ const useStore = create((set, get) => ({
         get().fetchUserDefaults();
         get().fetchHistory();
       } else {
-        set({ user: null });
+        // Unsubscribe all listeners on logout/session end
+        if (todayUnsub) { todayUnsub(); todayUnsub = null; }
+        if (historyUnsub) { historyUnsub(); historyUnsub = null; }
+        if (defaultsUnsub) { defaultsUnsub(); defaultsUnsub = null; }
+
+        set({ 
+          user: null, 
+          todayData: {
+            tasks: [],
+            commentary: '',
+            completionPercentage: 0,
+            updatedAt: new Date(),
+            date: format(new Date(), 'yyyy-MM-dd')
+          },
+          history: [],
+          userDefaults: []
+        });
+
         try {
           await signInAnonymously(auth);
         } catch (error) {
@@ -134,6 +170,7 @@ const useStore = create((set, get) => ({
         setDoc(docRef, { tasks: initialDefaults }).catch(err => console.error("Setting defaults failed:", err));
       }
     });
+    return defaultsUnsub;
   },
 
   updateUserDefaults: async (tasks) => {
@@ -337,6 +374,7 @@ const useStore = create((set, get) => ({
       });
       set({ history });
     }, (err) => console.error("History fetch failed:", err));
+    return historyUnsub;
   },
 
   getStreaks: () => {
